@@ -10,10 +10,11 @@ import android.media.MediaCodec;
 import android.media.MediaCodec.BufferInfo;
 import android.media.MediaExtractor;
 import android.media.MediaFormat;
+import android.os.ParcelFileDescriptor;
 import android.util.Log;
 
+import java.io.File;
 import java.nio.ByteBuffer;
-import android.os.ParcelFileDescriptor;
 
 import org.chromium.base.CalledByNative;
 import org.chromium.base.JNINamespace;
@@ -25,6 +26,13 @@ class WebAudioMediaCodecBridge {
     // TODO(rtoy): What is the correct timeout value for reading
     // from a file in memory?
     static final long TIMEOUT_MICROSECONDS = 500;
+    @CalledByNative
+    private static String CreateTempFile(Context ctx) throws java.io.IOException {
+        File outputDirectory = ctx.getCacheDir();
+        File outputFile = File.createTempFile("webaudio", ".dat", outputDirectory);
+        return outputFile.getAbsolutePath();
+    }
+
     @CalledByNative
     private static boolean decodeAudioFile(Context ctx,
                                            int nativeMediaCodecBridge,
@@ -53,7 +61,14 @@ class WebAudioMediaCodecBridge {
 
         MediaFormat format = extractor.getTrackFormat(0);
 
-        int channelCount = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT);
+        // Number of channels specified in the file
+        int inputChannelCount = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT);
+
+        // Number of channels the decoder will provide. (Not
+        // necessarily the same as inputChannelCount.  See
+        // crbug.com/266006.)
+        int outputChannelCount = inputChannelCount;
+
         int sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE);
         String mime = format.getString(MediaFormat.KEY_MIME);
 
@@ -69,13 +84,13 @@ class WebAudioMediaCodecBridge {
         if (DEBUG) {
             Log.d(LOG_TAG, "Tracks: " + extractor.getTrackCount()
                   + " Rate: " + sampleRate
-                  + " Channels: " + channelCount
+                  + " Channels: " + inputChannelCount
                   + " Mime: " + mime
                   + " Duration: " + durationMicroseconds + " microsec");
         }
 
         nativeInitializeDestination(nativeMediaCodecBridge,
-                                    channelCount,
+                                    inputChannelCount,
                                     sampleRate,
                                     durationMicroseconds);
 
@@ -131,7 +146,8 @@ class WebAudioMediaCodecBridge {
                 ByteBuffer buf = codecOutputBuffers[outputBufIndex];
 
                 if (info.size > 0) {
-                    nativeOnChunkDecoded(nativeMediaCodecBridge, buf, info.size);
+                    nativeOnChunkDecoded(nativeMediaCodecBridge, buf, info.size,
+                                         inputChannelCount, outputChannelCount);
                 }
 
                 buf.clear();
@@ -142,6 +158,10 @@ class WebAudioMediaCodecBridge {
                 }
             } else if (outputBufIndex == MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED) {
                 codecOutputBuffers = codec.getOutputBuffers();
+            } else if (outputBufIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                MediaFormat newFormat = codec.getOutputFormat();
+                outputChannelCount = newFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT);
+                Log.d(LOG_TAG, "output format changed to " + newFormat);
             }
         }
 
@@ -155,11 +175,12 @@ class WebAudioMediaCodecBridge {
     }
 
     private static native void nativeOnChunkDecoded(
-        int nativeWebAudioMediaCodecBridge, ByteBuffer buf, int size);
+        int nativeWebAudioMediaCodecBridge, ByteBuffer buf, int size,
+        int inputChannelCount, int outputChannelCount);
 
     private static native void nativeInitializeDestination(
         int nativeWebAudioMediaCodecBridge,
-        int channelCount,
+        int inputChannelCount,
         int sampleRate,
         long durationMicroseconds);
 }

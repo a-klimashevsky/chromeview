@@ -34,6 +34,7 @@ public class WindowAndroid {
 
     private int mNextRequestCode = 0;
     protected Activity mActivity;
+    protected Context mApplicationContext;
     protected SparseArray<IntentCallback> mOutstandingIntents;
     protected HashMap<Integer, String> mIntentErrors;
 
@@ -42,6 +43,7 @@ public class WindowAndroid {
      */
     public WindowAndroid(Activity activity) {
         mActivity = activity;
+        mApplicationContext = mActivity.getApplicationContext();
         mOutstandingIntents = new SparseArray<IntentCallback>();
         mIntentErrors = new HashMap<Integer, String>();
 
@@ -51,10 +53,11 @@ public class WindowAndroid {
      * Shows an intent and returns the results to the callback object.
      * @param intent The intent that needs to be showed.
      * @param callback The object that will receive the results for the intent.
-     * @param error The error string to be show if activity is paused before intent results.
+     * @param errorId The ID of error string to be show if activity is paused before intent
+     *        results.
      * @return Whether the intent was shown.
      */
-    public boolean showIntent(Intent intent, IntentCallback callback, String error) {
+    public boolean showIntent(Intent intent, IntentCallback callback, int errorId) {
         int requestCode = REQUEST_CODE_PREFIX + mNextRequestCode;
         mNextRequestCode = (mNextRequestCode + 1) % REQUEST_CODE_RANGE_SIZE;
 
@@ -65,7 +68,7 @@ public class WindowAndroid {
         }
 
         mOutstandingIntents.put(requestCode, callback);
-        if (error != null) mIntentErrors.put(requestCode, error);
+        mIntentErrors.put(requestCode, mActivity.getString(errorId));
 
         return true;
     }
@@ -78,6 +81,14 @@ public class WindowAndroid {
         if (error != null) {
             Toast.makeText(mActivity, error, Toast.LENGTH_SHORT).show();
         }
+    }
+
+    /**
+     * Displays an error message from the given resource id.
+     * @param resId The error message string's resource id.
+     */
+    public void showError(int resId) {
+        showError(mActivity.getString(resId));
     }
 
     /**
@@ -98,9 +109,18 @@ public class WindowAndroid {
     /**
      * TODO(nileshagrawal): Stop returning Activity Context crbug.com/233440.
      * @return Activity context.
+     * @see #getApplicationContext()
      */
+    @Deprecated
     public Context getContext() {
         return mActivity;
+    }
+
+    /**
+     * @return The application context for this activity.
+     */
+    public Context getApplicationContext() {
+        return mApplicationContext;
     }
 
     /**
