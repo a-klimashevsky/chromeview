@@ -12,13 +12,11 @@ cd ~/chromium/src
 if [ -f ~/.build_android ] ; then
   . build/android/envsetup.sh --target-arch=arm
   android_gyp
-  ninja -C out/Release -k0 -j$CPUS libwebviewchromium android_webview_apk \
-      content_shell_apk chromium_testshell
+  ninja -C out/Release -k0 -j 10 libwebviewchromium android_webview_apk content_shell_apk chromium_testshell
 fi
 
 if [ -f ~/.build_x86 ] ; then
   . build/android/envsetup.sh --target-arch=x86
   android_gyp
-  ninja -C out/Release -k0 -j$CPUS libwebviewchromium android_webview_apk \
-      content_shell_apk chromium_testshell
+  ninja -C out/Release -k0 -j$CPUS libwebviewchromium android_webview_apk content_shell_apk chromium_testshell
 fi
